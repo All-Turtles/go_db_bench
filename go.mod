@@ -3,6 +3,7 @@ module github.com/jackc/go_db_bench
 go 1.12
 
 require (
+	github.com/cespare/prettybench v0.0.0-20150116022406-03b8cfe5406c // indirect
 	github.com/go-pg/pg v8.0.6+incompatible
 	github.com/go-pg/pg/v9 v9.1.4
 	github.com/jackc/pgconn v1.4.0

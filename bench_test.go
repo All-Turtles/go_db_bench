@@ -12,7 +12,7 @@ import (
 	"github.com/go-pg/pg/orm"
 	"github.com/go-pg/pg/types"
 	gopg "github.com/go-pg/pg/v9"
-	"github.com/jackc/go_db_bench/raw"
+
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgconn/stmtcache"
 	"github.com/jackc/pgtype"
@@ -27,7 +27,6 @@ var (
 	pq            *sql.DB
 	pg            *gopg.DB
 	pgConn        *pgconn.PgConn
-	rawConn       *raw.Conn
 	randPersonIDs []int32
 )
 
@@ -54,9 +53,9 @@ where id between ? and ? + 24`
 
 var selectLargeTextSQL = `select repeat('*', $1)`
 
-var rawSelectPersonNameStmt *raw.PreparedStatement
-var rawSelectPersonStmt *raw.PreparedStatement
-var rawSelectMultiplePeopleStmt *raw.PreparedStatement
+// var rawSelectPersonNameStmt *raw.PreparedStatement
+// var rawSelectPersonStmt *raw.PreparedStatement
+// var rawSelectMultiplePeopleStmt *raw.PreparedStatement
 
 var rxBuf []byte
 
@@ -185,29 +184,29 @@ func setup(b *testing.B) {
 			b.Fatalf("pgConn.Prepare() failed: %v", err)
 		}
 
-		rawConfig := raw.ConnConfig{
-			Host:     config.ConnConfig.Host,
-			Port:     config.ConnConfig.Port,
-			User:     config.ConnConfig.User,
-			Password: config.ConnConfig.Password,
-			Database: config.ConnConfig.Database,
-		}
-		rawConn, err = raw.Connect(rawConfig)
-		if err != nil {
-			b.Fatalf("raw.Connect failed: %v", err)
-		}
-		rawSelectPersonNameStmt, err = rawConn.Prepare("selectPersonName", selectPersonNameSQL)
-		if err != nil {
-			b.Fatalf("rawConn.Prepare failed: %v", err)
-		}
-		rawSelectPersonStmt, err = rawConn.Prepare("selectPerson", selectPersonSQL)
-		if err != nil {
-			b.Fatalf("rawConn.Prepare failed: %v", err)
-		}
-		rawSelectMultiplePeopleStmt, err = rawConn.Prepare("selectMultiplePeople", selectMultiplePeopleSQL)
-		if err != nil {
-			b.Fatalf("rawConn.Prepare failed: %v", err)
-		}
+		// rawConfig := raw.ConnConfig{
+		// 	Host:     config.ConnConfig.Host,
+		// 	Port:     config.ConnConfig.Port,
+		// 	User:     config.ConnConfig.User,
+		// 	Password: config.ConnConfig.Password,
+		// 	Database: config.ConnConfig.Database,
+		// }
+		// rawConn, err = raw.Connect(rawConfig)
+		// if err != nil {
+		// 	b.Fatalf("raw.Connect failed: %v", err)
+		// }
+		// rawSelectPersonNameStmt, err = rawConn.Prepare("selectPersonName", selectPersonNameSQL)
+		// if err != nil {
+		// 	b.Fatalf("rawConn.Prepare failed: %v", err)
+		// }
+		// rawSelectPersonStmt, err = rawConn.Prepare("selectPerson", selectPersonSQL)
+		// if err != nil {
+		// 	b.Fatalf("rawConn.Prepare failed: %v", err)
+		// }
+		// rawSelectMultiplePeopleStmt, err = rawConn.Prepare("selectMultiplePeople", selectMultiplePeopleSQL)
+		// if err != nil {
+		// 	b.Fatalf("rawConn.Prepare failed: %v", err)
+		// }
 
 		rxBuf = make([]byte, 16384)
 
@@ -303,30 +302,26 @@ func benchmarkSelectSingleShortString(b *testing.B, stmt *sql.Stmt) {
 	}
 }
 
-func BenchmarkRawSelectSingleShortValue(b *testing.B) {
-	setup(b)
-
-	b.ResetTimer()
-
-	txBufs := make([][]byte, len(randPersonIDs))
-	for i, personID := range randPersonIDs {
-		var err error
-		txBufs[i], err = rawConn.BuildPreparedQueryBuf(rawSelectPersonNameStmt, personID)
-		if err != nil {
-			b.Fatalf("rawConn.BuildQueryBuf failed: %v", err)
-		}
-	}
-
-	for i := 0; i < b.N; i++ {
-		txBuf := txBufs[i%len(txBufs)]
-		_, err := rawConn.Conn().Write(txBuf)
-		if err != nil {
-			b.Fatalf("rawConn.Conn.Write failed: %v", err)
-		}
-
-		rxRawUntilReady(b)
-	}
-}
+// func BenchmarkRawSelectSingleShortValue(b *testing.B) {
+// 	setup(b)
+// 	b.ResetTimer()
+// 	txBufs := make([][]byte, len(randPersonIDs))
+// 	for i, personID := range randPersonIDs {
+// 		var err error
+// 		txBufs[i], err = rawConn.BuildPreparedQueryBuf(rawSelectPersonNameStmt, personID)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.BuildQueryBuf failed: %v", err)
+// 		}
+// 	}
+// 	for i := 0; i < b.N; i++ {
+// 		txBuf := txBufs[i%len(txBufs)]
+// 		_, err := rawConn.Conn().Write(txBuf)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.Conn.Write failed: %v", err)
+// 		}
+// 		rxRawUntilReady(b)
+// 	}
+// }
 
 func BenchmarkPgxNativeSelectSingleShortBytes(b *testing.B) {
 	setup(b)
@@ -716,29 +711,26 @@ func benchmarkSelectSingleRowNotPrepared(b *testing.B, db *sql.DB, sql string) {
 	}
 }
 
-func BenchmarkRawSelectSingleRow(b *testing.B) {
-	setup(b)
-	b.ResetTimer()
-
-	txBufs := make([][]byte, len(randPersonIDs))
-	for i, personID := range randPersonIDs {
-		var err error
-		txBufs[i], err = rawConn.BuildPreparedQueryBuf(rawSelectPersonStmt, personID)
-		if err != nil {
-			b.Fatalf("rawConn.BuildPreparedQueryBuf failed: %v", err)
-		}
-	}
-
-	for i := 0; i < b.N; i++ {
-		txBuf := txBufs[i%len(txBufs)]
-		_, err := rawConn.Conn().Write(txBuf)
-		if err != nil {
-			b.Fatalf("rawConn.Conn.Write failed: %v", err)
-		}
-
-		rxRawUntilReady(b)
-	}
-}
+// func BenchmarkRawSelectSingleRow(b *testing.B) {
+// 	setup(b)
+// 	b.ResetTimer()
+// 	txBufs := make([][]byte, len(randPersonIDs))
+// 	for i, personID := range randPersonIDs {
+// 		var err error
+// 		txBufs[i], err = rawConn.BuildPreparedQueryBuf(rawSelectPersonStmt, personID)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.BuildPreparedQueryBuf failed: %v", err)
+// 		}
+// 	}
+// 	for i := 0; i < b.N; i++ {
+// 		txBuf := txBufs[i%len(txBufs)]
+// 		_, err := rawConn.Conn().Write(txBuf)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.Conn.Write failed: %v", err)
+// 		}
+// 		rxRawUntilReady(b)
+// 	}
+// }
 
 func BenchmarkPgxNativeSelectMultipleRows(b *testing.B) {
 	setup(b)
@@ -1126,42 +1118,39 @@ func benchmarkSelectMultipleRows(b *testing.B, stmt *sql.Stmt) {
 	}
 }
 
-func BenchmarkRawSelectMultipleRows(b *testing.B) {
-	setup(b)
+// func BenchmarkRawSelectMultipleRows(b *testing.B) {
+// 	setup(b)
+// 	b.ResetTimer()
+// 	txBufs := make([][]byte, len(randPersonIDs))
+// 	for i, personID := range randPersonIDs {
+// 		var err error
+// 		txBufs[i], err = rawConn.BuildPreparedQueryBuf(rawSelectMultiplePeopleStmt, personID)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.BuildPreparedQueryBuf failed: %v", err)
+// 		}
+// 	}
+// 	for i := 0; i < b.N; i++ {
+// 		txBuf := txBufs[i%len(txBufs)]
+// 		_, err := rawConn.Conn().Write(txBuf)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.Conn.Write failed: %v", err)
+// 		}
 
-	b.ResetTimer()
+// 		rxRawUntilReady(b)
+// 	}
+// }
 
-	txBufs := make([][]byte, len(randPersonIDs))
-	for i, personID := range randPersonIDs {
-		var err error
-		txBufs[i], err = rawConn.BuildPreparedQueryBuf(rawSelectMultiplePeopleStmt, personID)
-		if err != nil {
-			b.Fatalf("rawConn.BuildPreparedQueryBuf failed: %v", err)
-		}
-	}
-
-	for i := 0; i < b.N; i++ {
-		txBuf := txBufs[i%len(txBufs)]
-		_, err := rawConn.Conn().Write(txBuf)
-		if err != nil {
-			b.Fatalf("rawConn.Conn.Write failed: %v", err)
-		}
-
-		rxRawUntilReady(b)
-	}
-}
-
-func rxRawUntilReady(b *testing.B) {
-	for {
-		n, err := rawConn.Conn().Read(rxBuf)
-		if err != nil {
-			b.Fatalf("rawConn.Conn.Read failed: %v", err)
-		}
-		if rxBuf[n-6] == 'Z' && rxBuf[n-2] == 5 && rxBuf[n-1] == 'I' {
-			return
-		}
-	}
-}
+// func rxRawUntilReady(b *testing.B) {
+// 	for {
+// 		n, err := rawConn.Conn().Read(rxBuf)
+// 		if err != nil {
+// 			b.Fatalf("rawConn.Conn.Read failed: %v", err)
+// 		}
+// 		if rxBuf[n-6] == 'Z' && rxBuf[n-2] == 5 && rxBuf[n-1] == 'I' {
+// 			return
+// 		}
+// 	}
+// }
 
 func checkPersonBytesWasFilled(b *testing.B, p personBytes) {
 	if p.Id == 0 {
